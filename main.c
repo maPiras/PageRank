@@ -56,9 +56,10 @@ int main(int argc, char *argv[]) {
   int numit;
   double *vector = pagerank(graph,D,E,M,T,&numit);
 
-  for(int i=0; i<graph->N;i++){
-    printf("Xnext[%d]: %f\n",i+1,vector[i]);
-  }
+  double sum = 0;
+  printf("Nodo 89072: %f\n",vector[89072]);
+
+  printf("Sum of ranks: %f\n",sum);
   // Creare aux per deallocare grafo
 
   return 0;

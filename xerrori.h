@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <math.h>
 
 #define QUI __LINE__,__FILE__
 

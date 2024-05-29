@@ -31,35 +31,45 @@ void *tbody_calcolo(void *arg) {
   int thread_vector_index;
 
   while(true){
-    xpthread_mutex_lock(dati->vector_cond->imutex,QUI);
-    while(dati->vector_cond->index >= dati->graph->N){
-      xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->imutex,QUI);
-    }
-    thread_vector_index = dati->vector_cond->index;
-    if(dati->vector_cond->index < 0){
-      xpthread_cond_signal(dati->vector_cond->cv,QUI);
-      xpthread_mutex_unlock(dati->vector_cond->imutex,QUI);
+    xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
+      while(dati->vector_cond->index >= dati->graph->N){
+        xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
+      }
 
-      
+      thread_vector_index = dati->vector_cond->index;
+      if(dati->vector_cond->index < 0){
+        xpthread_cond_signal(dati->vector_cond->cv,QUI);
+        xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
+        break;
+      } else {
+      dati->vector_cond->index += 1;
 
-      break;
-    } else {
-    dati->vector_cond->index += 1;
     xpthread_cond_signal(dati->vector_cond->cv,QUI);
-    xpthread_mutex_unlock(dati->vector_cond->imutex,QUI);
+    xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
     }
 
     double term2 = 0;
-
+    
     for(inmap *i = dati->graph->in[thread_vector_index];i != NULL;i=i->next){
       term2 += dati->y[i->N];
     }
-
     term2 = term2 * dati->dump;
 
-    dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(dati->graph->N)) * (*(dati->St));
+    if(thread_vector_index == 89072) printf("term 1 %.9f term 2 %.9f term 3 %.9f\n",dati->term1,term2,((dati->dump)/(double)(dati->graph->N)) * (*(dati->St)));
 
-    //*(dati->errore) += abs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
+    dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(double)(dati->graph->N)) * (*(dati->St));
+    if(dati->graph->out[thread_vector_index] != 0)
+    dati->y_aux[thread_vector_index] = dati->x[thread_vector_index]/dati->graph->out[thread_vector_index];
+    else{
+      xpthread_mutex_lock(dati->Stmutex,QUI);
+      *(dati->St_new) += dati->x[thread_vector_index];
+      xpthread_mutex_unlock(dati->Stmutex,QUI);
+    }
+    xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
+    dati->terminated_cond->terminated += 1;
+    *(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
+    xpthread_cond_signal(dati->terminated_cond->cv,QUI);
+    xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
   }
   return NULL;
 }

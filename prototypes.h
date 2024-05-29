@@ -18,19 +18,19 @@ inmap **in;
 }grafo;
 
 typedef struct{
-    pthread_mutex_t *imutex;
+    pthread_mutex_t *mutex;
     pthread_cond_t *cv;
     int index;
 }vector_cond;
 
 typedef struct{
-    pthread_mutex_t *amutex;
+    pthread_mutex_t *mutex;
     pthread_cond_t *cv;
     int aux_index;
 }aux;
 
 typedef struct{
-    pthread_mutex_t *tmutex;
+    pthread_mutex_t *mutex;
     pthread_cond_t *cv;
     int terminated;
 }terminated;
@@ -55,9 +55,12 @@ double dump;
 int *iter;
 double *errore;
 double *St;
+double *St_new;
+double *y_aux;
 vector_cond *vector_cond;
 terminated *terminated_cond;
-aux *aux_cond;
+pthread_mutex_t *Stmutex;
+
 }dati_calcolatori;
 
 void* tbody_scrittura(void *arg);

@@ -4,23 +4,13 @@ CC=gcc
 CFLAGS=-std=c11 -Wall -g -O -pthread
 LDLIBS=-lm -lrt -pthread
 
-EXECS=progetto.out
+SRCS = main.c graph_gen.c pagerank.c auxfunctions.c xerrori.c
+OBJS = main.o graph_gen.o pagerank.o auxfunction.o xerrori.o
 
-# primo target: gli eseguibili sono precondizioni del target
-# quindi verranno tutti creati
-all: $(EXECS)
+pagerank: $(OBJS)
+	$(CC) $^ $(LDLIBS) -o $<
 
-# regola per la creazioni degli eseguibili utilizzando xerrori.o
-%.out: %.o xerrori.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-# regola per la creazione di file oggetto che dipendono da xerrori.h
-%.o: %.c xerrori.h
+$(OBJS): $(SRCS) xerrori.h prototypes.h
 	$(CC) $(CFLAGS) -c $<
 
-# esempio di target che non corrisponde a una compilazione
-# ma esegue la cancellazione dei file oggetto e degli eseguibili
-clean:
-	rm -f *.o $(EXECS)
-
-
+gcc -std=c11 -Wall -g -O -pthread -lm -lrt -pthread *.c *.h -o pagerank
