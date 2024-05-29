@@ -24,20 +24,23 @@ int main(int argc, char *argv[]) {
       break;
     case 'm':
       M = atoi(optarg);
+
       break;
     case 'd':
       D = atof(optarg);
+
       break;
     case 'e':
       E = atof(optarg);
+
       break;
     case 't':
       T = atoi(optarg);
+
       break;
     default:
       help();
       exit(1);
-      break;
     }
   }
 
@@ -50,6 +53,12 @@ int main(int argc, char *argv[]) {
 
   nodes_dead_end_valid_arcs(graph);
 
+  int numit;
+  double *vector = pagerank(graph,D,E,M,T,&numit);
+
+  for(int i=0; i<graph->N;i++){
+    printf("Xnext[%d]: %f\n",i+1,vector[i]);
+  }
   // Creare aux per deallocare grafo
 
   return 0;

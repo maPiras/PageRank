@@ -28,7 +28,40 @@ void *tbody_scrittura(void *arg) {
 
 void *tbody_calcolo(void *arg) {
   dati_calcolatori *dati = (dati_calcolatori *)arg;
-  
+  int thread_vector_index;
+
+  while(true){
+    xpthread_mutex_lock(dati->vector_cond->imutex,QUI);
+    while(dati->vector_cond->index >= dati->graph->N){
+      xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->imutex,QUI);
+    }
+    thread_vector_index = dati->vector_cond->index;
+    if(dati->vector_cond->index < 0){
+      xpthread_cond_signal(dati->vector_cond->cv,QUI);
+      xpthread_mutex_unlock(dati->vector_cond->imutex,QUI);
+
+      
+
+      break;
+    } else {
+    dati->vector_cond->index += 1;
+    xpthread_cond_signal(dati->vector_cond->cv,QUI);
+    xpthread_mutex_unlock(dati->vector_cond->imutex,QUI);
+    }
+
+    double term2 = 0;
+
+    for(inmap *i = dati->graph->in[thread_vector_index];i != NULL;i=i->next){
+      term2 += dati->y[i->N];
+    }
+
+    term2 = term2 * dati->dump;
+
+    dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(dati->graph->N)) * (*(dati->St));
+
+    //*(dati->errore) += abs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
+  }
+  return NULL;
 }
 
 void inserisci(grafo *graph, arco arch) {
@@ -42,9 +75,7 @@ void inserisci(grafo *graph, arco arch) {
       graph->out[arch.from] += 1;
     } else {
       inmap *i;
-      for (i = graph->in [arch.to]; i->next != NULL && i->N != arch.from;
-           i = i->next)
-        ;
+      for (i = graph->in[arch.to]; i->next != NULL && i->N != arch.from; i = i->next);
       if (i->N != arch.from) {
         i->next = nuovo;
         graph->out[arch.from] += 1;
