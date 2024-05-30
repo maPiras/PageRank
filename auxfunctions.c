@@ -1,6 +1,6 @@
-#include "prototypes.h"
 #include "xerrori.h"
-#include <stdio.h>
+#include "prototypes.h"
+
 
 void *tbody_scrittura(void *arg) {
   dati_consumatori *d = (dati_consumatori *)arg;
@@ -16,14 +16,14 @@ void *tbody_scrittura(void *arg) {
     xsem_post(d->free, QUI);
 
     if (arch.from == -1)
-      pthread_exit(NULL);
+      return(NULL);
 
     xpthread_mutex_lock(d->gmutex, QUI);
     inserisci(d->graph, arch);
     xpthread_mutex_unlock(d->gmutex, QUI);
   } while (true);
 
-  pthread_exit(NULL);
+  return(NULL);
 }
 
 void *tbody_calcolo(void *arg) {
@@ -54,8 +54,6 @@ void *tbody_calcolo(void *arg) {
       term2 += dati->y[i->N];
     }
     term2 = term2 * dati->dump;
-
-    if(thread_vector_index == 89072) printf("term 1 %.9f term 2 %.9f term 3 %.9f\n",dati->term1,term2,((dati->dump)/(double)(dati->graph->N)) * (*(dati->St)));
 
     dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(double)(dati->graph->N)) * (*(dati->St));
     if(dati->graph->out[thread_vector_index] != 0)
@@ -129,4 +127,17 @@ void help() {
   fprintf(stderr, "-d D damping factor (default 0.9)\n");
   fprintf(stderr, "-e E max error (default 1.0e-7)\n");
   fprintf(stderr, "-t T number of auxiliary threads (default 3)\n");
+}
+
+int compare(const void* p, const void* q)
+{
+  double l = ((struct coppia_indice*)p)->rank;
+  double r = ((struct coppia_indice*)q)->rank;
+  if(l>r) return -1;
+  else if(l<r) return 1;
+  else return 0;
+}
+
+void deallocate(grafo* g){
+  
 }

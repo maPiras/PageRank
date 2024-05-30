@@ -1,5 +1,10 @@
-#include "xerrori.h"
 #define BUFFSIZE 30
+
+#define TOP_NODES 3
+#define MAX_ITERATIONS 100
+#define DUMPING 0.9
+#define MAX_ERROR 1.e-07
+#define THREADS 3
 
 typedef struct arco{
 int from;
@@ -63,10 +68,16 @@ pthread_mutex_t *Stmutex;
 
 }dati_calcolatori;
 
+typedef struct coppia_indice{
+    int indice;
+    double rank;
+}coppia_indice;
+
 void* tbody_scrittura(void *arg);
 void* tbody_calcolo(void *arg);
 grafo* crea_grafo(const char*,int);
 void inserisci(grafo*, arco);
 void nodes_dead_end_valid_arcs(grafo*);
 double *pagerank(grafo*, double, double, int, int, int*);
+int compare(const void* a,const void* b);
 void help();

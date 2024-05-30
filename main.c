@@ -1,12 +1,5 @@
-#include "prototypes.h"
 #include "xerrori.h"
-#include <stdio.h>
-
-#define TOP_NODES 3
-#define MAX_ITERATIONS 100
-#define DUMPING 0.9
-#define MAX_ERROR 1.e-07
-#define THREADS 3
+#include "prototypes.h"
 
 int main(int argc, char *argv[]) {
   int opt;
@@ -57,10 +50,29 @@ int main(int argc, char *argv[]) {
   double *vector = pagerank(graph,D,E,M,T,&numit);
 
   double sum = 0;
-  printf("Nodo 89072: %f\n",vector[89072]);
+  for(int i=0; i<graph->N; i++)
+  sum+=vector[i];
 
-  printf("Sum of ranks: %f\n",sum);
+  if(numit < M)
+  printf("Converged after %d iterations\n",numit);
+  else
+  printf("Did not converge after %d iterations\n",M);
+
+  printf("Sum of ranks: %f (should be 1)\n",sum);
+
+  coppia_indice vector_index [graph->N];
+  for(int i=0; i<graph->N; i++){
+    vector_index[i].indice = i;
+    vector_index[i].rank = vector[i];
+  }
+
+  qsort(vector_index,graph->N,sizeof(coppia_indice),compare);
+
+  printf("Top %d nodes:\n",K);
+  for(int i=0; i<K; i++) printf("  %d %f\n",vector_index[i].indice,vector_index[i].rank);
+
   // Creare aux per deallocare grafo
 
   return 0;
 }
+

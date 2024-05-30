@@ -1,16 +1,20 @@
-# definizione del compilatore e dei flag di compilazione
-# che vengono usate dalle regole implicite
-CC=gcc
-CFLAGS=-std=c11 -Wall -g -O -pthread
-LDLIBS=-lm -lrt -pthread
+CC = gcc
+CFLAGS = -std=c11 -Wall -g -O -pthread
+LIBS = -lm -lrt -pthread
 
 SRCS = main.c graph_gen.c pagerank.c auxfunctions.c xerrori.c
-OBJS = main.o graph_gen.o pagerank.o auxfunction.o xerrori.o
+OBJS = main.o graph_gen.o pagerank.o auxfunctions.o xerrori.o
 
+all: pagerank
+
+# Regola per creare l'eseguibile
 pagerank: $(OBJS)
-	$(CC) $^ $(LDLIBS) -o $<
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
-$(OBJS): $(SRCS) xerrori.h prototypes.h
-	$(CC) $(CFLAGS) -c $<
+# Regola per creare i file oggetto
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-gcc -std=c11 -Wall -g -O -pthread -lm -lrt -pthread *.c *.h -o pagerank
+# Regola per pulire i file generati
+clean:
+	rm -f $(OBJS) pagerank
