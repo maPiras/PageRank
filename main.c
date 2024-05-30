@@ -54,13 +54,13 @@ int main(int argc, char *argv[]) {
   sum+=vector[i];
 
   if(numit < M)
-  printf("Converged after %d iterations\n",numit);
+  printf("Converged after %d iterations\n",numit+1);
   else
   printf("Did not converge after %d iterations\n",M);
 
   printf("Sum of ranks: %f (should be 1)\n",sum);
 
-  coppia_indice vector_index [graph->N];
+  coppia_indice *vector_index = malloc(sizeof(coppia_indice)*graph->N);
   for(int i=0; i<graph->N; i++){
     vector_index[i].indice = i;
     vector_index[i].rank = vector[i];

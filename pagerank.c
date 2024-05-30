@@ -75,6 +75,8 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   }
 
   do{
+    printf("Iterazione %d\n",iter+1);
+
     xpthread_mutex_lock(&t_mutex,QUI);
     while(cond_terminated.terminated != nodes_number){
       xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
@@ -82,17 +84,27 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     cond_terminated.terminated=0;
     xpthread_mutex_unlock(&t_mutex,QUI);
 
+    if(errore<eps){
+      xpthread_mutex_lock(vector_index.mutex,QUI);
+      vector_index.index = -1;
+      xpthread_cond_signal(vector_index.cv,QUI);
+      xpthread_mutex_unlock(vector_index.mutex,QUI);
+      break;
+    }
+      
+
     St = St_new;
     for(int i=0; i<nodes_number; i++){
        y[i] = y_aux[i];
        x[i] = xnext[i];
     }
+    //fprintf(stderr,"SWAPPP %d - err: %f\n",iter,errore);
     
     xpthread_mutex_lock(vector_index.mutex,QUI);
     while(vector_index.index < nodes_number){
       xpthread_cond_wait(vector_index.cv,vector_index.mutex,QUI);
     }
-    //fprintf(stderr,"Errore iterazione %d: %f\n",iter,errore);
+    fprintf(stderr,"Iterazione %d - err: %f\n",iter,errore);
     St_new=0;
     errore = 0;
     vector_index.index = 0;
@@ -101,13 +113,9 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     
     iter++;
 
-    if(errore < eps){
-      *numiter = iter;
-      break;
-    } else errore = 0;
-
   }while(iter<=maxiter);
 
+  *numiter = iter;
   vector_index.index = -1;
 
   for(int i=0; i<taux; i++) xpthread_join(t[i],NULL,QUI);

@@ -35,8 +35,8 @@ void *tbody_calcolo(void *arg) {
       while(dati->vector_cond->index >= dati->graph->N){
         xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
       }
-
       thread_vector_index = dati->vector_cond->index;
+      //printf("Thread %d consuma %d\n",gettid(),thread_vector_index);
       if(dati->vector_cond->index < 0){
         xpthread_cond_signal(dati->vector_cond->cv,QUI);
         xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
@@ -44,7 +44,6 @@ void *tbody_calcolo(void *arg) {
       } else {
       dati->vector_cond->index += 1;
 
-    xpthread_cond_signal(dati->vector_cond->cv,QUI);
     xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
     }
 
@@ -57,15 +56,18 @@ void *tbody_calcolo(void *arg) {
 
     dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(double)(dati->graph->N)) * (*(dati->St));
     if(dati->graph->out[thread_vector_index] != 0)
-    dati->y_aux[thread_vector_index] = dati->x[thread_vector_index]/dati->graph->out[thread_vector_index];
+    dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/dati->graph->out[thread_vector_index];
     else{
       xpthread_mutex_lock(dati->Stmutex,QUI);
-      *(dati->St_new) += dati->x[thread_vector_index];
+      *(dati->St_new) += dati->xnext[thread_vector_index];
       xpthread_mutex_unlock(dati->Stmutex,QUI);
     }
+
     xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
+
     dati->terminated_cond->terminated += 1;
     *(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
+    
     xpthread_cond_signal(dati->terminated_cond->cv,QUI);
     xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
   }
