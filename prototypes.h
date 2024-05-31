@@ -50,6 +50,11 @@ pthread_mutex_t *gmutex;
 grafo *graph;
 }dati_consumatori;
 
+typedef struct coppia_indice{
+    int indice;
+    double rank;
+}coppia_indice;
+
 typedef struct{
 grafo *graph;
 double *x;
@@ -69,10 +74,12 @@ coppia_indice* massimo;
 
 }dati_calcolatori;
 
-typedef struct coppia_indice{
-    int indice;
-    double rank;
-}coppia_indice;
+
+typedef struct handler_data{
+    coppia_indice* massimo;
+    int *iterazione;
+    pthread_mutex_t* mutex;
+}handler_data;
 
 void* tbody_scrittura(void *arg);
 void* tbody_calcolo(void *arg);

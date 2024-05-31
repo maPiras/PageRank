@@ -66,7 +66,10 @@ void *tbody_calcolo(void *arg) {
 
     dati->terminated_cond->terminated += 1;
     *(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
-    
+    if(dati->xnext[thread_vector_index] > dati->massimo->rank){
+      dati->massimo->rank = dati->xnext[thread_vector_index];
+      dati->massimo->indice = thread_vector_index;
+    }
     xpthread_cond_signal(dati->terminated_cond->cv,QUI);
     xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
   }
@@ -75,17 +78,19 @@ void *tbody_calcolo(void *arg) {
 
 void inserisci(grafo *graph, arco arch) {
   if (arch.from != arch.to) {
-    inmap *nuovo = malloc(sizeof(inmap));
-    nuovo->N = arch.from;
-    nuovo->next = NULL;
-
     if (graph->in[arch.to] == NULL) {
+      inmap *nuovo = malloc(sizeof(inmap));
+      nuovo->N = arch.from;
+      nuovo->next = NULL;
       graph->in[arch.to] = nuovo;
       graph->out[arch.from] += 1;
     } else {
       inmap *i;
       for (i = graph->in[arch.to]; i->next != NULL && i->N != arch.from; i = i->next);
       if (i->N != arch.from) {
+        inmap *nuovo = malloc(sizeof(inmap));
+        nuovo->N = arch.from;
+        nuovo->next = NULL;
         i->next = nuovo;
         graph->out[arch.from] += 1;
       }
@@ -159,7 +164,20 @@ void deallocate(grafo* g){
 }
 
 void *handler_body(void *d){
-  while(true){
+  handler_data* dati = (handler_data *) d;
 
+  int s;
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask,SIGUSR1);
+  sigaddset(&mask,SIGTERM);
+  while(true){
+    int e = sigwait(&mask,&s);
+    if(e!=0) perror("Errore sigwait");
+    if(s == SIGUSR1){
+      xpthread_mutex_lock(dati->mutex,QUI);
+      fprintf(stderr,"Iterazione corrente %d: nodo massimo %d con rank %f\n",*(dati->iterazione),dati->massimo->indice,dati->massimo->rank);
+      xpthread_mutex_unlock(dati->mutex,QUI);
+    } else if(s == SIGTERM) return NULL;
   }
 }

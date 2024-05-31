@@ -2,15 +2,21 @@
 #include "prototypes.h"
 
 double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numiter){
+  fprintf(stderr,"Inizio calcolo pagerank...\n");
+  double errore = 0;
+  int iter= 0;
+
+  pthread_mutex_t aux = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t t_cv = PTHREAD_COND_INITIALIZER;
 
   sigset_t mask;
-  sigfillset(&mask);  
-  sigdelset(&mask,SIGUSR2);
+  sigemptyset(&mask);  
+  sigaddset(&mask,SIGUSR1);
+  sigaddset(&mask,SIGTERM);
   pthread_sigmask(SIG_BLOCK,&mask,NULL);
 
   pthread_t gestore;
-
-  xpthread_create(&gestore,NULL,handler_body,NULL,QUI);
 
   double nodes_number = (double)g->N;
   
@@ -28,6 +34,21 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   double *xnext = malloc(nodes_number*sizeof(double));
   double *y_aux = malloc(nodes_number*sizeof(double));
 
+  coppia_indice massimo;
+  massimo.indice = 0;
+  massimo.rank = x[0];
+
+  coppia_indice massimo_next;
+  massimo_next.indice = -1;
+  massimo_next.rank = -1;
+
+  handler_data dati_gestore;
+  dati_gestore.massimo = &massimo;
+  dati_gestore.iterazione = &iter;
+  dati_gestore.mutex = &t_mutex;
+
+  xpthread_create(&gestore,NULL,handler_body,&dati_gestore,QUI);
+
   pthread_t t[taux];
   dati_calcolatori dati[taux];
 
@@ -43,18 +64,12 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   double term1 = (1-d)/nodes_number;
   double St = 0;
   double St_new = 0;
-  
-  double errore = 0;
-  int iter= 0;
 
   for(int i=0; i<nodes_number; i++){
     if(g->out[i] == 0) St += x[i];
   }
 
-  pthread_mutex_t aux = PTHREAD_MUTEX_INITIALIZER;
 
-  pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
-  pthread_cond_t t_cv = PTHREAD_COND_INITIALIZER;
 
   terminated cond_terminated;
 
@@ -78,7 +93,7 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     dati[i].St_new = &St_new;
     dati[i].terminated_cond = &cond_terminated;
     dati[i].aux = &aux;
-    dati[i].massimo = &massimo;
+    dati[i].massimo = &massimo_next;
 
     xpthread_create(&t[i], NULL, &tbody_calcolo, &dati[i], QUI);
   }
@@ -89,6 +104,9 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
       xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
     }
     cond_terminated.terminated=0;
+    massimo.indice = massimo_next.indice;
+    massimo.rank = massimo_next.rank;
+    massimo_next.rank = -1;
     xpthread_mutex_unlock(&t_mutex,QUI);
 
     if(errore<eps){
@@ -122,8 +140,13 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
 
   }while(iter<=maxiter);
 
+  
+
   *numiter = iter;
   vector_index.index = -1;
+
+  pthread_kill(gestore,SIGTERM);
+  xpthread_join(gestore,NULL,QUI);
 
   for(int i=0; i<taux; i++) xpthread_join(t[i],NULL,QUI);
 
@@ -131,7 +154,7 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   free(y);
   free(y_aux);
 
-  xpthread_mutex_destroy(&Stm,QUI);
+  xpthread_mutex_destroy(&aux,QUI);
   xpthread_mutex_destroy(&t_mutex,QUI);
   xpthread_mutex_destroy(&v_mutex,QUI);
   xpthread_cond_destroy(&v_cv,QUI);
