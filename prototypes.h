@@ -64,7 +64,8 @@ double *St_new;
 double *y_aux;
 vector_cond *vector_cond;
 terminated *terminated_cond;
-pthread_mutex_t *Stmutex;
+pthread_mutex_t *aux;
+coppia_indice* massimo;
 
 }dati_calcolatori;
 
@@ -81,3 +82,5 @@ void nodes_dead_end_valid_arcs(grafo*);
 double *pagerank(grafo*, double, double, int, int, int*);
 int compare(const void* a,const void* b);
 void help();
+void deallocate(grafo*);
+void *handler_body(void *);

@@ -2,6 +2,16 @@
 #include "prototypes.h"
 
 double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numiter){
+
+  sigset_t mask;
+  sigfillset(&mask);  
+  sigdelset(&mask,SIGUSR2);
+  pthread_sigmask(SIG_BLOCK,&mask,NULL);
+
+  pthread_t gestore;
+
+  xpthread_create(&gestore,NULL,handler_body,NULL,QUI);
+
   double nodes_number = (double)g->N;
   
   double *x = malloc(nodes_number*sizeof(double));
@@ -14,8 +24,8 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     else
     y[i]=0;
   }
-  double *xnext = malloc(nodes_number*sizeof(double));
 
+  double *xnext = malloc(nodes_number*sizeof(double));
   double *y_aux = malloc(nodes_number*sizeof(double));
 
   pthread_t t[taux];
@@ -31,19 +41,17 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   vector_index.index = 0;
 
   double term1 = (1-d)/nodes_number;
-
   double St = 0;
+  double St_new = 0;
+  
+  double errore = 0;
+  int iter= 0;
 
   for(int i=0; i<nodes_number; i++){
     if(g->out[i] == 0) St += x[i];
   }
 
-  double St_new = 0;
-
-  double errore = 0;
-  int iter= 0;
-
-  pthread_mutex_t Stm = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_t aux = PTHREAD_MUTEX_INITIALIZER;
 
   pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_cond_t t_cv = PTHREAD_COND_INITIALIZER;
@@ -69,14 +77,13 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     dati[i].y_aux = y_aux;
     dati[i].St_new = &St_new;
     dati[i].terminated_cond = &cond_terminated;
-    dati[i].Stmutex = &Stm;
+    dati[i].aux = &aux;
+    dati[i].massimo = &massimo;
 
     xpthread_create(&t[i], NULL, &tbody_calcolo, &dati[i], QUI);
   }
 
   do{
-    printf("Iterazione %d\n",iter+1);
-
     xpthread_mutex_lock(&t_mutex,QUI);
     while(cond_terminated.terminated != nodes_number){
       xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
@@ -104,7 +111,7 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     while(vector_index.index < nodes_number){
       xpthread_cond_wait(vector_index.cv,vector_index.mutex,QUI);
     }
-    fprintf(stderr,"Iterazione %d - err: %f\n",iter,errore);
+
     St_new=0;
     errore = 0;
     vector_index.index = 0;

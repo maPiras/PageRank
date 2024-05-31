@@ -4,12 +4,11 @@
 grafo* crea_grafo(const char *infile,int T){
   FILE* fd = xfopen(infile, "r", QUI);
   if(fd == NULL) xtermina("Errore apertura infile\n", QUI);
-  ssize_t s;
-  char* line;
+
+  char* line = NULL;
   size_t len = 0;
-  //Deallocare line e togliere commento
   
-  while((s=getline(&line,&len,fd)) != -1){
+  while(getline(&line,&len,fd) != -1){
     if(line[0]=='%') continue;
     break;
   }
@@ -39,10 +38,10 @@ grafo* crea_grafo(const char *infile,int T){
   pthread_mutex_t gmutex = PTHREAD_MUTEX_INITIALIZER;
   
   sem_t items;
-  sem_t free;
+  sem_t free_slots;
   
   xsem_init(&items, 0, 0, QUI);
-  xsem_init(&free, 0, BUFFSIZE, QUI);
+  xsem_init(&free_slots, 0, BUFFSIZE, QUI);
   
   int pbindex = 0;
   int cbindex = 0;
@@ -52,7 +51,7 @@ grafo* crea_grafo(const char *infile,int T){
 
   for(int i=0; i<T; i++){
     d[i].bmutex = &bmutex;
-    d[i].free = &free;
+    d[i].free = &free_slots;
     d[i].items = &items;
     d[i].buffer = Buffer;
     d[i].cbindex = &cbindex;
@@ -66,9 +65,13 @@ grafo* crea_grafo(const char *infile,int T){
   while(getline(&line,&len,fd) != -1){
     arco arch;
     sscanf(line, "%d %d",&arch.from,&arch.to);
+
+    if(arch.from > graph->N || arch.to > graph->N)
+    continue;
+
     arch.from --;
     arch.to --;
-    xsem_wait(&free, QUI);
+    xsem_wait(&free_slots, QUI);
     xpthread_mutex_lock(&bmutex, QUI);
     Buffer[pbindex % BUFFSIZE] = arch;
     pbindex += 1;
@@ -81,7 +84,7 @@ grafo* crea_grafo(const char *infile,int T){
   fine.to = -1;
   
   for(int i=0; i<T; i++){
-    xsem_wait(&free, QUI);
+    xsem_wait(&free_slots, QUI);
     xpthread_mutex_lock(&bmutex, QUI);
     Buffer[pbindex % BUFFSIZE] = fine;
     pbindex += 1;
@@ -94,9 +97,13 @@ grafo* crea_grafo(const char *infile,int T){
 
   xpthread_mutex_destroy(&bmutex, QUI);
   xpthread_mutex_destroy(&gmutex, QUI);
+
   xsem_destroy(&items, QUI);
-  xsem_destroy(&free, QUI);
+  xsem_destroy(&free_slots, QUI);
+  
   fclose(fd);
+
+  free(line);
 
   return graph;
 }

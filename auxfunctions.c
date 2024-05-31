@@ -6,7 +6,7 @@ void *tbody_scrittura(void *arg) {
   dati_consumatori *d = (dati_consumatori *)arg;
   arco arch;
 
-  do {
+  do { 
     xsem_wait(d->items, QUI);
     xpthread_mutex_lock(d->bmutex, QUI);
     arch.from = d->buffer[*(d->cbindex) % BUFFSIZE].from;
@@ -36,7 +36,6 @@ void *tbody_calcolo(void *arg) {
         xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
       }
       thread_vector_index = dati->vector_cond->index;
-      //printf("Thread %d consuma %d\n",gettid(),thread_vector_index);
       if(dati->vector_cond->index < 0){
         xpthread_cond_signal(dati->vector_cond->cv,QUI);
         xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
@@ -58,9 +57,9 @@ void *tbody_calcolo(void *arg) {
     if(dati->graph->out[thread_vector_index] != 0)
     dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/dati->graph->out[thread_vector_index];
     else{
-      xpthread_mutex_lock(dati->Stmutex,QUI);
+      xpthread_mutex_lock(dati->aux,QUI);
       *(dati->St_new) += dati->xnext[thread_vector_index];
-      xpthread_mutex_unlock(dati->Stmutex,QUI);
+      xpthread_mutex_unlock(dati->aux,QUI);
     }
 
     xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
@@ -141,5 +140,26 @@ int compare(const void* p, const void* q)
 }
 
 void deallocate(grafo* g){
+
+  for(int i=0; i<g->N; i++){
+    inmap* j=g->in[i];
+    inmap* l;
+
+    while(j!=NULL){
+      l=j;
+      j=j->next;
+      free(l);
+    }
+    free(j);
+  }
   
+  free(g->in);
+  free(g->out);
+  free(g);
+}
+
+void *handler_body(void *d){
+  while(true){
+
+  }
 }

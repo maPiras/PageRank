@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   else
   printf("Did not converge after %d iterations\n",M);
 
-  printf("Sum of ranks: %f (should be 1)\n",sum);
+  printf("Sum of ranks: %.4f (should be 1)\n",sum);
 
   coppia_indice *vector_index = malloc(sizeof(coppia_indice)*graph->N);
   for(int i=0; i<graph->N; i++){
@@ -71,8 +71,9 @@ int main(int argc, char *argv[]) {
   printf("Top %d nodes:\n",K);
   for(int i=0; i<K; i++) printf("  %d %f\n",vector_index[i].indice,vector_index[i].rank);
 
-  // Creare aux per deallocare grafo
+  deallocate(graph);
+  free(vector_index);
+  free(vector);
 
   return 0;
 }
-
