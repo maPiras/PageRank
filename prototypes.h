@@ -41,13 +41,17 @@ typedef struct{
 }terminated;
 
 typedef struct{
+
+grafo *graph;
 pthread_mutex_t *bmutex;
+pthread_mutex_t *gmutex;
+
 sem_t *items;
 sem_t *free;
+
 int *cbindex;
 arco *buffer;
-pthread_mutex_t *gmutex;
-grafo *graph;
+
 }dati_consumatori;
 
 typedef struct coppia_indice{
@@ -57,20 +61,25 @@ typedef struct coppia_indice{
 
 typedef struct{
 grafo *graph;
+
 double *x;
 double *y;
+double *y_aux;
 double *xnext;
-double term1;
-double dump;
-int *iter;
-double *errore;
+
 double *St;
 double *St_new;
-double *y_aux;
-vector_cond *vector_cond;
-terminated *terminated_cond;
-pthread_mutex_t *aux;
-coppia_indice* massimo;
+
+double term1;
+double dump;
+
+int *iter;
+double *errore;
+
+vector_cond *vector_cond; //Condition variable per consumare l'indice
+terminated *terminated_cond; //Condition variable per incrementare il contatore dei thread che hanno terminato il calcolo
+pthread_mutex_t *aux; //Mutex ausiliaria per aggiornare il fattore St ausiliario (new)
+coppia_indice* massimo; //Struct per tenere traccia del nodo con rank massimo
 
 }dati_calcolatori;
 
@@ -81,13 +90,17 @@ typedef struct handler_data{
     pthread_mutex_t* mutex;
 }handler_data;
 
-void* tbody_scrittura(void *arg);
-void* tbody_calcolo(void *arg);
 grafo* crea_grafo(const char*,int);
 void inserisci(grafo*, arco);
-void nodes_dead_end_valid_arcs(grafo*);
+void* tbody_scrittura(void *arg);
+
 double *pagerank(grafo*, double, double, int, int, int*);
-int compare(const void* a,const void* b);
-void help();
-void deallocate(grafo*);
-void *handler_body(void *);
+void* tbody_calcolo(void *arg);
+
+void nodes_dead_end_valid_arcs(grafo*);
+
+int compare(const void* a,const void* b); //Funzione usata per 
+void help(); //Stampa messaggio help
+
+void deallocate(grafo*); //Funzione ausiliaria di deallocazione del grafo
+void *handler_body(void *); //Corpo del gestore segnali

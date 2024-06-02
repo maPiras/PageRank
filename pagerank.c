@@ -56,10 +56,14 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   pthread_cond_t v_cv = PTHREAD_COND_INITIALIZER;
 
   vector_cond vector_index;
-
   vector_index.cv = &v_cv;
   vector_index.mutex = &v_mutex;
   vector_index.index = 0;
+
+  terminated cond_terminated;
+  cond_terminated.mutex = &t_mutex;
+  cond_terminated.cv = &t_cv;
+  cond_terminated.terminated = 0;
 
   double term1 = (1-d)/nodes_number;
   double St = 0;
@@ -68,15 +72,6 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   for(int i=0; i<nodes_number; i++){
     if(g->out[i] == 0) St += x[i];
   }
-
-
-
-  terminated cond_terminated;
-
-  cond_terminated.mutex = &t_mutex;
-  cond_terminated.cv = &t_cv;
-  cond_terminated.terminated = 0;
-
 
   for(int i=0; i<taux; i++){
     dati[i].graph = g;
@@ -116,23 +111,23 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
       xpthread_mutex_unlock(vector_index.mutex,QUI);
       break;
     }
-      
-
+    
+    
     St = St_new;
     for(int i=0; i<nodes_number; i++){
        y[i] = y_aux[i];
        x[i] = xnext[i];
     }
-    //fprintf(stderr,"SWAPPP %d - err: %f\n",iter,errore);
     
     xpthread_mutex_lock(vector_index.mutex,QUI);
     while(vector_index.index < nodes_number){
       xpthread_cond_wait(vector_index.cv,vector_index.mutex,QUI);
     }
 
-    St_new=0;
-    errore = 0;
-    vector_index.index = 0;
+    St_new = 0; //Azzero l'accumulatore del fattore St per la nuova iterazione
+    errore = 0; //Azzero l'errore per la nuova iterazione
+    vector_index.index = 0; //Ricomincio dal nodo zero '' ''
+
     xpthread_cond_signal(vector_index.cv,QUI);
     xpthread_mutex_unlock(vector_index.mutex,QUI);
     
@@ -140,15 +135,13 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
 
   }while(iter<=maxiter);
 
-  
-
   *numiter = iter;
   vector_index.index = -1;
 
+   for(int i=0; i<taux; i++) xpthread_join(t[i],NULL,QUI);
+
   pthread_kill(gestore,SIGTERM);
   xpthread_join(gestore,NULL,QUI);
-
-  for(int i=0; i<taux; i++) xpthread_join(t[i],NULL,QUI);
 
   free(x);
   free(y);

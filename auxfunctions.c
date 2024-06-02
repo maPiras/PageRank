@@ -9,9 +9,11 @@ void *tbody_scrittura(void *arg) {
   do { 
     xsem_wait(d->items, QUI);
     xpthread_mutex_lock(d->bmutex, QUI);
+    
     arch.from = d->buffer[*(d->cbindex) % BUFFSIZE].from;
     arch.to = d->buffer[*(d->cbindex) % BUFFSIZE].to;
     *(d->cbindex) += 1;
+
     xpthread_mutex_unlock(d->bmutex, QUI);
     xsem_post(d->free, QUI);
 
@@ -19,8 +21,11 @@ void *tbody_scrittura(void *arg) {
       return(NULL);
 
     xpthread_mutex_lock(d->gmutex, QUI);
+
     inserisci(d->graph, arch);
+    
     xpthread_mutex_unlock(d->gmutex, QUI);
+
   } while (true);
 
   return(NULL);
