@@ -67,7 +67,7 @@ grafo* crea_grafo(const char *infile,int T){
     sscanf(line, "%d %d",&arch.from,&arch.to);
 
     if(arch.from > graph->N || arch.to > graph->N)
-    continue;
+    xtermina("Arco non valido\n",QUI);
 
     arch.from --;
     arch.to --;

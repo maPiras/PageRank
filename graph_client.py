@@ -12,11 +12,17 @@ def tbody(filename):
         with open(filename,"r") as f:
             for line in f:
                 if line[0] == '%': continue
-                form_line =line.split(" ")
+                form_line = line.split(" ")
                 if len(form_line) == 3:
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[2])))
                 elif len(form_line) == 2:
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[1])))
+                    print(f"Inviato {int(form_line[0])} {int(form_line[1])}")
+                    
+        s.recv
+                    
+                    
+                    
             
             
 def main(fileArr):
