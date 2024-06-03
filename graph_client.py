@@ -17,9 +17,22 @@ def tbody(filename):
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[2])))
                 elif len(form_line) == 2:
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[1])))
-                    print(f"Inviato {int(form_line[0])} {int(form_line[1])}")
                     
-        s.recv
+        code = s.recv(4)
+        returncode = struct.unpack("!i",code)[0]
+        length = s.recv(4)
+        mess_length = struct.unpack("!i",length)[0]
+        mess = s.recv(mess_length)
+        mess_text = mess.decode()
+        print(mess_text)
+        
+        print(f"{filename} Exit code: {returncode}")
+
+
+        
+        
+        
+        
                     
                     
                     

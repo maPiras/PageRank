@@ -10,6 +10,23 @@ logging.basicConfig(filename="server" + '.log',
                     level=logging.DEBUG, datefmt='%H:%M:%S',
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
+def main(host=HOST,port=PORT):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)            
+            s.bind((host, port))
+            s.listen()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                while True:
+                    print("In attesa di un client...")
+                    conn, addr = s.accept()
+                    executor.submit(gestisci_connessione, conn,addr)
+        except KeyboardInterrupt:
+            pass
+            
+        print("Bye dal server\n")
+        s.shutdown(socket.SHUT_RDWR)
+        executor.shutdown()
 
 def gestisci_connessione(connessione,addr):
     with tempfile.NamedTemporaryFile(mode='a+', suffix=".mtx") as temp:
@@ -19,8 +36,6 @@ def gestisci_connessione(connessione,addr):
         N = struct.unpack("!2i",data)[0]
         A = struct.unpack("!2i",data)[1]
         temp.write(f"{N} {N} {A}")
-        
-        print(f"Inserita prima linea A: {A}")
         
         for i in range(A):
             data = connessione.recv(8)
@@ -41,45 +56,20 @@ def gestisci_connessione(connessione,addr):
 
             buffer.clear()
         
-        command = f"./pagerank {temp}"
+        command = ['./pagerank',temp.name]
         esito = subprocess.run(command,capture_output=True)
-        if(esito.returncode != 0):
-            
         
-        
-
-def main(host=HOST,port=PORT):
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)            
-            s.bind((host, port))
-            s.listen()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                while True:
-                    print("In attesa di un client...")
-                    conn, addr = s.accept()
-                    executor.submit(gestisci_connessione, conn,addr)
-        except KeyboardInterrupt:
-            pass
+        if(esito.returncode != 0):    
+            connessione.sendall(struct.pack("!i",esito.returncode))
+            connessione.sendall(struct.pack("!i",len(esito.stderr)))
+            connessione.sendall(struct.pack(esito.stderr))
+        else:   
+            connessione.sendall(struct.pack("!i",0))
+            connessione.sendall(struct.pack("!i",len(esito.stdout.encode())))
+            connessione.sendall(esito.stdout.encode())
+            print(esito.stdout)
             
-        print("Bye dal server\n")
-        s.shutdown(socket.SHUT_RDWR)
             
-
-
+            
         
 main()
-
-
-
-def recv_all(conn,n):
-  chunks = b''
-  bytes_recd = 0
-  while bytes_recd < n:
-    chunk = conn.recv(min(n - bytes_recd, 1024))
-    if len(chunk) == 0:
-      raise RuntimeError("socket connection broken")
-    chunks += chunk
-    bytes_recd = bytes_recd + len(chunk)
-  return chunks
