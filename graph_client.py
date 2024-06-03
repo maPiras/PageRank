@@ -15,7 +15,7 @@ def tbody(filename):
                 form_line = line.split(" ")
                 if len(form_line) == 3:
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[2])))
-                elif len(form_line) == 2:
+                if len(form_line) == 2:
                     s.send(struct.pack("!2i",int(form_line[0]),int(form_line[1])))
                     
         code = s.recv(4)
@@ -24,9 +24,14 @@ def tbody(filename):
         mess_length = struct.unpack("!i",length)[0]
         mess = s.recv(mess_length)
         mess_text = mess.decode()
-        print(mess_text)
         
+        stampa = mess_text.split('\n')
         print(f"{filename} Exit code: {returncode}")
+        for line in stampa:
+            if(len(line)>0):
+                print(f"{filename} {line}")
+            
+        print(f"{filename} Bye")
 
 
         
