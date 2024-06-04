@@ -1,4 +1,4 @@
-#include "xerrori.h"
+#include "errors/xerrori.h"
 #include "prototypes.h"
 
 grafo* crea_grafo(const char *infile,int T){
@@ -13,9 +13,13 @@ grafo* crea_grafo(const char *infile,int T){
     break;
   }
 
-  int N1;
-  int N2;
-  int num_archi;
+  int N1 = 0;
+  int N2 = 0;
+  int num_archi = 0;
+
+  arco fine;
+  fine.from = -1;
+  fine.to = -1;
   
   sscanf(line, "%d %d %d", &N1,&N2,&num_archi);
 
@@ -64,10 +68,41 @@ grafo* crea_grafo(const char *infile,int T){
   
   while(getline(&line,&len,fd) != -1){
     arco arch;
-    sscanf(line, "%d %d",&arch.from,&arch.to);
+    arch.from = 0;
+    arch.to = 0;
 
-    if(arch.from > graph->N || arch.to > graph->N)
-    xtermina("Arco non valido\n",QUI);
+    sscanf(line, "%d %d",&arch.from,&arch.to);
+    printf("Leggo %s\n",line);
+
+    if(arch.from > graph->N || arch.to > graph->N || arch.from <= 0 || arch.to <= 0){
+      //Se incontro un arco non valido interrompo tutti i thread inserendo T -1 nel grafo (nel pagerank se ne inserisce solo uno senza incrementare l'indice)
+      //Anticipo poi la deallocazione di tutti gli elementi compreso il grafo 
+      
+      for(int i=0; i<T; i++){
+      xsem_wait(&free_slots, QUI);
+      xpthread_mutex_lock(&bmutex, QUI);
+      Buffer[pbindex % BUFFSIZE] = fine;
+      pbindex += 1;
+      xpthread_mutex_unlock(&bmutex, QUI);
+      xsem_post(&items, QUI);
+      }
+
+      for(int i=0; i<T; i++)
+        xpthread_join(t[i], NULL, QUI);
+
+      xpthread_mutex_destroy(&bmutex, QUI);
+      xpthread_mutex_destroy(&gmutex, QUI);
+
+      xsem_destroy(&items, QUI);
+      xsem_destroy(&free_slots, QUI);
+      
+      fclose(fd);
+      free(line);
+
+      deallocate(graph);
+
+      xtermina("Arco non valido\n",QUI);
+    }
 
     arch.from --;
     arch.to --;
@@ -78,10 +113,6 @@ grafo* crea_grafo(const char *infile,int T){
     xpthread_mutex_unlock(&bmutex, QUI);
     xsem_post(&items, QUI);
   }
-
-  arco fine;
-  fine.from = -1;
-  fine.to = -1;
   
   for(int i=0; i<T; i++){
     xsem_wait(&free_slots, QUI);

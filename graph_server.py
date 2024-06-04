@@ -61,6 +61,8 @@ def gestisci_connessione(connessione,addr):
             temp.writelines(buffer)
             buffer.clear()
         temp.seek(0)
+        
+        
         command = ['./pagerank',temp.name]
         esito = subprocess.run(command,capture_output=True)
             

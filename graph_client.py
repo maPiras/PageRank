@@ -5,6 +5,18 @@ import struct
 HOST = "127.0.0.1"  
 PORT = 51112
 
+def main(fileArr):
+    threads = list()
+    for fn in fileArr:
+        t=threading.Thread(target=tbody, args=(fn,))
+        t.start()
+        threads.append(t)
+    
+    for tr in threads:
+        tr.join()
+
+
+
 def tbody(filename):
     with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
         s.connect((HOST,PORT))
@@ -32,30 +44,9 @@ def tbody(filename):
                 print(f"{filename} {line}")
             
         print(f"{filename} Bye")
-
-
-        
-        
-        
-        
-                    
-                    
-                    
-            
-            
-def main(fileArr):
-    threads = list()
-    for fn in fileArr:
-        t=threading.Thread(target=tbody, args=(fn,))
-        t.start()
-        threads.append(t)
-    
-    for tr in threads:
-        tr.join()
     
     
     
-
 if len(sys.argv) >= 2:
     main(sys.argv[1:])
 else:

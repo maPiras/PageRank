@@ -2,8 +2,8 @@ CC = gcc
 CFLAGS = -std=c11 -Wall -g -O -pthread
 LIBS = -lm -lrt -pthread
 
-SRCS = main.c graph_gen.c pagerank.c auxfunctions.c xerrori.c
-OBJS = main.o graph_gen.o pagerank.o auxfunctions.o xerrori.o
+SRCS = main.c graph_gen.c pagerank.c auxfunctions.c errors/xerrori.c
+OBJS = main.o graph_gen.o pagerank.o auxfunctions.o errors/xerrori.o
 
 all: pagerank
 

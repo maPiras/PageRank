@@ -1,4 +1,4 @@
-#include "xerrori.h"
+#include "errors/xerrori.h"
 #include "prototypes.h"
 
 int main(int argc, char *argv[]) {

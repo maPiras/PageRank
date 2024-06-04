@@ -1,9 +1,13 @@
 # Progetto Pagerank - Laboratorio II 2024
 
+## Calcolo
+
 La fase del calcolo del pagerank si divide in due step: il primo consiste nella consumazione dell'indice da parte del thread.
 Per questo step è predisposta una condition variable accoppiata ad una mutex le quali consentono ai thread di accedere all'indice in maniera atomica. 
+
 La mutex viene bloccata per il tempo strettamente necessario a salvare l'indice in una variabile locale e incrementare quello condiviso.
-La mutex viene poi sbloccata per consentire agli altri thread di procerere con gli indici successivi, nel frattempo chi ha consumato l'indice ha proceduto coi calcoli.
+
+Viene poi sbloccata per consentire agli altri thread di procedere con gli indici successivi.
 
 ```C
     xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
@@ -22,7 +26,7 @@ La mutex viene poi sbloccata per consentire agli altri thread di procerere con g
 ```
 Il secondo step ha inizio immediatamente dopo il calcolo delle componenti di xnext e delle variabili ausiliarie, di queste St_new la quale, poichè condivisa, viene incrementata sotto mutex;
 
-Questo passaggio prevede l'incremento del contatore dei thread che hanno terminato il calcolo oltre che la verifica del massimo.
+Questo passaggio prevede l'incremento del contatore dei thread che hanno terminato il calcolo oltre che la verifica del nodo di rank massimo.
 
 La fase è necessaria affinchè il main thread sia in grado di capire quando può effettuare lo swap tra i dati strutturati ausiliari e i vettori che dovranno essere completamente aggiornati prima della nuova iterazione.
 
@@ -37,4 +41,26 @@ xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
     }
     xpthread_cond_signal(dati->terminated_cond->cv,QUI);
     xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
+```
+
+## Server python
+
+Per quanto riguarda la gestione dei thread nel server python si è fatto uso di un threadpool:
+ad ogni thread viene assegnata una funzione la quale riceve gli archi dal client uno alla volta, i quali vengono inseriti in una lista e scritti nel file temporaneo non appena questa raggiunge una lunghezza di 10 elementi.
+
+Alla fine dell'iterazione viene effettuata in ogni caso una push nel caso in cui l'ultimo blocco sia composto da meno di 10 elementi.
+
+```Py
+        buffer.append(f"{From} {To}\n")
+        
+        if len(buffer) >= 10:
+            for v in buffer:
+                temp.write(v)
+                
+            buffer.clear()
+    
+    if(len(buffer) != 0):
+        temp.writelines(buffer)
+        buffer.clear()
+    temp.seek(0)
 ```
