@@ -1,5 +1,12 @@
 # Progetto Pagerank - Laboratorio II 2024
 
+## Cartella src
+
+**auxfunctions.c** : funzioni thread body, handler body, deallocazione, conteggio dead ends, compare, help e inserimento di un nodo nel grafo.
+
+**prototypes.h** : prototipi delle suddette funzioni e dichiarazioni di tipi
+
+
 ## Calcolo
 
 La fase del calcolo del pagerank si divide in due step: il primo consiste nella consumazione dell'indice da parte del thread.
