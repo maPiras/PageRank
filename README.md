@@ -20,6 +20,7 @@ In questa fase si separa il caso particolare in cui sia in corso l'iterazione 0,
 
 Questo viene fatto verificando l'iterazione ed andando a eseguire le suddette operazioni solo nel caso in cui, appunto, l'iterazione sia la prima in assoluto.
 
+
 ```C
     xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
       while(dati->vector_cond->index >= dati->graph->N){
