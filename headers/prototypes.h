@@ -1,3 +1,5 @@
+#include <limits.h>
+
 #define BUFFSIZE 30
 
 #define TOP_NODES 3

@@ -59,7 +59,7 @@ grafo* crea_grafo(const char *infile,int T){
     d[i].items = &items;
     d[i].buffer = Buffer;
     d[i].cbindex = &cbindex;
-    d[i].graph = graph;
+    d[i].g = graph;
     d[i].gmutex = &gmutex;
 
     xpthread_create(&t[i], NULL, &tbody_scrittura, &d[i], QUI);

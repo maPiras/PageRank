@@ -21,7 +21,9 @@ void *tbody_scrittura(void *arg) {
       return(NULL);
 
     xpthread_mutex_lock(d->gmutex, QUI);
+
     inserisci(d->g, arch);
+    
     xpthread_mutex_unlock(d->gmutex, QUI);
 
   } while (true);
@@ -31,9 +33,10 @@ void *tbody_scrittura(void *arg) {
 
 void *tbody_calcolo(void *arg) {
   dati_calcolatori *dati = (dati_calcolatori *)arg;
-  int thread_vector_index;
+  int thread_vector_index = 0;
 
   while(true){
+    
     xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
       while(dati->vector_cond->index >= dati->g->N){
         xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
@@ -45,26 +48,40 @@ void *tbody_calcolo(void *arg) {
         break;
       } else {
       dati->vector_cond->index += 1;
-      xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
+
+    xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
+    }
+
+    if(*(dati->iter) != 0){
+      double term2 = 0.0;
+      double term3 = 0.0;
+      
+      for(inmap *i = dati->g->in[thread_vector_index];i != NULL;i=i->next){
+        term2 += dati->y[i->N];
       }
 
-    double term2 = 0.0;
-    double term3 = 0.0;
-    
-    for(inmap *i = dati->g->in[thread_vector_index];i != NULL;i=i->next){
-      term2 += dati->y[i->N];
-    }
-    term2 = term2 * dati->dump;
-    term3 = ((dati->dump)/(double)(dati->g->N)) * (*(dati->St));
+      term2 = term2 * dati->dump;
 
-    dati->xnext[thread_vector_index] = dati->term1 + term2 + term3;
-    
-    if(dati->g->out[thread_vector_index] != 0)
-      dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/dati->g->out[thread_vector_index];
-    else{
-      xpthread_mutex_lock(dati->aux,QUI);
-      *(dati->St_new) += dati->xnext[thread_vector_index];
-      xpthread_mutex_unlock(dati->aux,QUI);
+      term3 = ((dati->dump)/(double)(dati->g->N)) * (*(dati->St));
+
+      dati->xnext[thread_vector_index] = dati->term1 + term2 + term3;
+      if(dati->g->out[thread_vector_index] != 0)
+      dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/(double)dati->g->out[thread_vector_index];
+      else{
+        xpthread_mutex_lock(dati->aux,QUI);
+        *(dati->St_new) += dati->xnext[thread_vector_index];
+        xpthread_mutex_unlock(dati->aux,QUI);
+      }
+    } else{
+      dati->x[thread_vector_index]=(double)1/dati->g->N;
+      dati->xnext[thread_vector_index] = 0;
+
+      if(dati->g->out[thread_vector_index]>0)
+        dati->y[thread_vector_index]=dati->x[thread_vector_index]/(double)dati->g->out[thread_vector_index];
+      else dati->y[thread_vector_index]=0;
+
+      if(dati->g->out[thread_vector_index] == 0) 
+      *(dati->St) += dati->x[thread_vector_index];
     }
 
     xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
@@ -81,23 +98,23 @@ void *tbody_calcolo(void *arg) {
   return NULL;
 }
 
-void inserisci(grafo *g, arco arch) {
+void inserisci(grafo *graph, arco arch) {
   if (arch.from != arch.to) {
-    if (g->in[arch.to] == NULL) {
+    if (graph->in[arch.to] == NULL) {
       inmap *nuovo = malloc(sizeof(inmap));
       nuovo->N = arch.from;
       nuovo->next = NULL;
-      g->in[arch.to] = nuovo;
-      g->out[arch.from] += 1;
+      graph->in[arch.to] = nuovo;
+      graph->out[arch.from] += 1;
     } else {
       inmap *i;
-      for (i = g->in[arch.to]; i->next != NULL && i->N != arch.from; i = i->next);
+      for (i = graph->in[arch.to]; i->next != NULL && i->N != arch.from; i = i->next);
       if (i->N != arch.from) {
         inmap *nuovo = malloc(sizeof(inmap));
         nuovo->N = arch.from;
         nuovo->next = NULL;
         i->next = nuovo;
-        g->out[arch.from] += 1;
+        graph->out[arch.from] += 1;
       }
     }
   }
