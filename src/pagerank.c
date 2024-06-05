@@ -74,7 +74,7 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   }
 
   for(int i=0; i<taux; i++){
-    dati[i].graph = g;
+    dati[i].g = g;
     dati[i].x = x;
     dati[i].y = y;
     dati[i].St = &St;

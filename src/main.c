@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   else
   printf("Did not converge after %d iterations\n",M);
 
-  printf("Sum of ranks: %.4f (should be 1)\n",sum);
+  printf("Sum of ranks: %.4f   (should be 1)\n",sum);
 
   coppia_indice *vector_index = malloc(sizeof(coppia_indice)*graph->N);
   for(int i=0; i<graph->N; i++){
