@@ -3,8 +3,6 @@
 
 double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numiter){
   fprintf(stderr,"Inizio calcolo pagerank...\n");
-  double errore = 0;
-  int iter= 0;
 
   pthread_mutex_t aux = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -21,18 +19,13 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
   double nodes_number = (double)g->N;
   
   double *x = malloc(nodes_number*sizeof(double));
-  for(int i=0; i<g->N; i++) x[i]=1/nodes_number;
-
   double *y = malloc(nodes_number*sizeof(double));
-  for(int i=0; i<g->N; i++){
-    if(g->out[i]>0)
-    y[i]=x[i]/g->out[i];
-    else
-    y[i]=0;
-  }
 
   double *xnext = malloc(nodes_number*sizeof(double));
   double *y_aux = malloc(nodes_number*sizeof(double));
+
+  double errore = eps;
+  int iter = 0;
 
   coppia_indice massimo;
   massimo.indice = 0;
@@ -98,10 +91,21 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     while(cond_terminated.terminated != nodes_number){
       xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
     }
+
+    if(iter > 0){
+      St = St_new;
+      for(int i=0; i<nodes_number; i++){
+        y[i] = y_aux[i];
+        x[i] = xnext[i];
+      }
+    }
+
     cond_terminated.terminated=0;
     massimo.indice = massimo_next.indice;
     massimo.rank = massimo_next.rank;
     massimo_next.rank = -1;
+    iter++;
+    
     xpthread_mutex_unlock(&t_mutex,QUI);
 
     if(errore<eps){
@@ -110,13 +114,6 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
       xpthread_cond_signal(vector_index.cv,QUI);
       xpthread_mutex_unlock(vector_index.mutex,QUI);
       break;
-    }
-    
-    
-    St = St_new;
-    for(int i=0; i<nodes_number; i++){
-       y[i] = y_aux[i];
-       x[i] = xnext[i];
     }
     
     xpthread_mutex_lock(vector_index.mutex,QUI);
@@ -130,10 +127,8 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
 
     xpthread_cond_signal(vector_index.cv,QUI);
     xpthread_mutex_unlock(vector_index.mutex,QUI);
-    
-    iter++;
 
-  }while(iter<=maxiter);
+  }while(iter<maxiter);
 
   *numiter = iter;
   vector_index.index = -1;

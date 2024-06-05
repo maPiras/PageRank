@@ -72,7 +72,6 @@ grafo* crea_grafo(const char *infile,int T){
     arch.to = 0;
 
     sscanf(line, "%d %d",&arch.from,&arch.to);
-    printf("Leggo %s\n",line);
 
     if(arch.from > graph->N || arch.to > graph->N || arch.from <= 0 || arch.to <= 0){
       //Se incontro un arco non valido interrompo tutti i thread inserendo T -1 nel grafo (nel pagerank se ne inserisce solo uno senza incrementare l'indice)

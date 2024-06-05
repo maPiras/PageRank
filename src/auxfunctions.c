@@ -33,9 +33,10 @@ void *tbody_scrittura(void *arg) {
 
 void *tbody_calcolo(void *arg) {
   dati_calcolatori *dati = (dati_calcolatori *)arg;
-  int thread_vector_index;
+  int thread_vector_index = 0;
 
   while(true){
+    
     xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
       while(dati->vector_cond->index >= dati->graph->N){
         xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
@@ -51,24 +52,39 @@ void *tbody_calcolo(void *arg) {
     xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
     }
 
-    double term2 = 0;
-    
-    for(inmap *i = dati->graph->in[thread_vector_index];i != NULL;i=i->next){
-      term2 += dati->y[i->N];
-    }
-    term2 = term2 * dati->dump;
+    if(*(dati->iter) != 0){
+      double term2 = 0.0;
+      double term3 = 0.0;
+      
+      for(inmap *i = dati->graph->in[thread_vector_index];i != NULL;i=i->next){
+        term2 += dati->y[i->N];
+      }
 
-    dati->xnext[thread_vector_index] = dati->term1 + term2 + ((dati->dump)/(double)(dati->graph->N)) * (*(dati->St));
-    if(dati->graph->out[thread_vector_index] != 0)
-    dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/dati->graph->out[thread_vector_index];
-    else{
-      xpthread_mutex_lock(dati->aux,QUI);
-      *(dati->St_new) += dati->xnext[thread_vector_index];
-      xpthread_mutex_unlock(dati->aux,QUI);
+      term2 = term2 * dati->dump;
+
+      term3 = ((dati->dump)/(double)(dati->graph->N)) * (*(dati->St));
+
+      dati->xnext[thread_vector_index] = dati->term1 + term2 + term3;
+      if(dati->graph->out[thread_vector_index] != 0)
+      dati->y_aux[thread_vector_index] = dati->xnext[thread_vector_index]/(double)dati->graph->out[thread_vector_index];
+      else{
+        xpthread_mutex_lock(dati->aux,QUI);
+        *(dati->St_new) += dati->xnext[thread_vector_index];
+        xpthread_mutex_unlock(dati->aux,QUI);
+      }
+    } else{
+      dati->x[thread_vector_index]=(double)1/dati->graph->N;
+      dati->xnext[thread_vector_index] = 0;
+
+      if(dati->graph->out[thread_vector_index]>0)
+        dati->y[thread_vector_index]=dati->x[thread_vector_index]/(double)dati->graph->out[thread_vector_index];
+      else dati->y[thread_vector_index]=0;
+
+      if(dati->graph->out[thread_vector_index] == 0) 
+      *(dati->St) += dati->x[thread_vector_index];
     }
 
     xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
-
     dati->terminated_cond->terminated += 1;
     *(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
     if(dati->xnext[thread_vector_index] > dati->massimo->rank){
@@ -78,6 +94,7 @@ void *tbody_calcolo(void *arg) {
     xpthread_cond_signal(dati->terminated_cond->cv,QUI);
     xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
   }
+  
   return NULL;
 }
 

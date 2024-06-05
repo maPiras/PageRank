@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
   sum+=vector[i];
 
   if(numit < M)
-  printf("Converged after %d iterations\n",numit+1);
+  printf("Converged after %d iterations\n",numit);
   else
   printf("Did not converge after %d iterations\n",M);
 
