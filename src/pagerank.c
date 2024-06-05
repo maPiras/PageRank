@@ -98,6 +98,7 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
     while(cond_terminated.terminated != nodes_number){
       xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
     }
+    
     cond_terminated.terminated=0;
     massimo.indice = massimo_next.indice;
     massimo.rank = massimo_next.rank;
@@ -111,7 +112,6 @@ double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numi
       xpthread_mutex_unlock(vector_index.mutex,QUI);
       break;
     }
-    
     
     St = St_new;
     for(int i=0; i<nodes_number; i++){

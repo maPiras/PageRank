@@ -16,6 +16,10 @@ La mutex viene bloccata per il tempo strettamente necessario a salvare l'indice 
 
 Viene poi sbloccata per consentire agli altri thread di procedere con gli indici successivi.
 
+In questa fase si separa il caso particolare in cui sia in corso l'iterazione 0, ovvero la fase di inizializzazione dei vettori ausiliari x e y.
+
+Questo viene fatto verificando l'iterazione ed andando a eseguire le suddette operazioni solo nel caso in cui, appunto, l'iterazione sia la prima in assoluto.
+
 ```C
     xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
       while(dati->vector_cond->index >= dati->graph->N){

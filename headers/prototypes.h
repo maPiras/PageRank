@@ -42,7 +42,7 @@ typedef struct{
 
 typedef struct{
 
-grafo *graph;
+grafo *g;
 pthread_mutex_t *bmutex;
 pthread_mutex_t *gmutex;
 
@@ -60,7 +60,7 @@ typedef struct coppia_indice{
 }coppia_indice;
 
 typedef struct{
-grafo *graph;
+grafo *g;
 
 double *x;
 double *y;
