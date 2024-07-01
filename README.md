@@ -22,19 +22,19 @@ Questo viene fatto verificando l'iterazione ed andando a eseguire le suddette op
 
 
 ```C
-    xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
-      while(dati->vector_cond->index >= dati->graph->N){
-        xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
-      }
-      thread_vector_index = dati->vector_cond->index;
-      if(dati->vector_cond->index < 0){
-        xpthread_cond_signal(dati->vector_cond->cv,QUI);
-        xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
-        break;
-      } else {
-      dati->vector_cond->index += 1;
-
+xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
+  while(dati->vector_cond->index >= dati->graph->N){
+    xpthread_cond_wait(dati->vector_cond->cv,dati->vector_cond->mutex,QUI);
+  }
+  thread_vector_index = dati->vector_cond->index;
+  if(dati->vector_cond->index < 0){
+    xpthread_cond_signal(dati->vector_cond->cv,QUI);
     xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
+    break;
+  } else {
+  dati->vector_cond->index += 1;
+
+xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
 ```
 Il secondo step ha inizio immediatamente dopo il calcolo delle componenti di xnext e delle variabili ausiliarie, di queste St_new la quale, poichè condivisa, viene incrementata sotto mutex;
 
@@ -45,14 +45,14 @@ La fase è necessaria affinchè il main thread sia in grado di capire quando pu�
 ```C
 xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
 
-    dati->terminated_cond->terminated += 1;
-    *(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
-    if(dati->xnext[thread_vector_index] > dati->massimo->rank){
-      dati->massimo->rank = dati->xnext[thread_vector_index];
-      dati->massimo->indice = thread_vector_index;
-    }
-    xpthread_cond_signal(dati->terminated_cond->cv,QUI);
-    xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
+dati->terminated_cond->terminated += 1;
+*(dati->errore) += fabs(dati->xnext[thread_vector_index] - dati->x[thread_vector_index]);
+if(dati->xnext[thread_vector_index] > dati->massimo->rank){
+  dati->massimo->rank = dati->xnext[thread_vector_index];
+  dati->massimo->indice = thread_vector_index;
+}
+xpthread_cond_signal(dati->terminated_cond->cv,QUI);
+xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
 ```
 
 ## Server python
@@ -63,16 +63,16 @@ ad ogni thread viene assegnata una funzione la quale riceve gli archi dal client
 Alla fine dell'iterazione viene effettuata in ogni caso una push nel caso in cui l'ultimo blocco sia composto da meno di 10 elementi.
 
 ```Py
-        buffer.append(f"{From} {To}\n")
-        
-        if len(buffer) >= 10:
-            for v in buffer:
-                temp.write(v)
-                
-            buffer.clear()
+    buffer.append(f"{From} {To}\n")
     
-    if(len(buffer) != 0):
-        temp.writelines(buffer)
+    if len(buffer) >= 10:
+        for v in buffer:
+            temp.write(v)
+            
         buffer.clear()
-    temp.seek(0)
+
+if(len(buffer) != 0):
+    temp.writelines(buffer)
+    buffer.clear()
+temp.seek(0)
 ```
