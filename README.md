@@ -1,24 +1,24 @@
-# Progetto Pagerank - Laboratorio II 2024
+# PageRank - "Lab II" final project
 
-## Cartella src
+## Src folder
 
-**auxfunctions.c** : funzioni thread body, handler body, deallocazione, conteggio dead ends, compare, help e inserimento di un nodo nel grafo.
+**auxfunctions.c** : functions thread body, handler body, deallocation, counting dead ends, compare, help and inserting a node into the graph.
 
-**prototypes.h** : prototipi delle suddette funzioni e dichiarazioni di tipi
+**prototypes.h** : Prototypes of the above functions and type declarations
 
 
-## Calcolo
+## Calculation
 
-La fase del calcolo del pagerank si divide in due step: il primo consiste nella consumazione dell'indice da parte del thread.
-Per questo step è predisposta una condition variable accoppiata ad una mutex le quali consentono ai thread di accedere all'indice in maniera atomica. 
+The pagerank calculation phase is divided into two steps: the first consists in the consumption of the index by the thread.
+For this step, a condition variable coupled with a mutex is prepared which allows the threads to access the index atomically. 
 
-La mutex viene bloccata per il tempo strettamente necessario a salvare l'indice in una variabile locale e incrementare quello condiviso.
+The mutex is blocked for the time strictly necessary to save the index in a local variable and increase the shared one.
 
-Viene poi sbloccata per consentire agli altri thread di procedere con gli indici successivi.
+It is then unlocked to allow other threads to proceed with subsequent indexes.
 
-In questa fase si separa il caso particolare in cui sia in corso l'iterazione 0, ovvero la fase di inizializzazione dei vettori ausiliari x e y.
+In this phase, the particular case in which iteration 0 is in progress is separated, i.e. the initialization phase of the auxiliary vectors x and y.
 
-Questo viene fatto verificando l'iterazione ed andando a eseguire le suddette operazioni solo nel caso in cui, appunto, questa sia la prima in assoluto.
+This is done by checking the iteration and carrying out the aforementioned operations only if this is the first ever.
 
 
 ```C
@@ -36,11 +36,11 @@ xpthread_mutex_lock(dati->vector_cond->mutex,QUI);
 
 xpthread_mutex_unlock(dati->vector_cond->mutex,QUI);
 ```
-Il secondo step ha inizio immediatamente dopo il calcolo delle componenti di xnext e delle variabili ausiliarie, di queste St_new la quale, poichè condivisa, viene incrementata sotto mutex;
+The second step begins immediately after the calculation of the components of xnext and the auxiliary variables, of which St_new which, since it is shared, is incremented under mutex;
 
-Questo passaggio prevede l'incremento del contatore dei thread che hanno terminato il calcolo oltre che la verifica del nodo di rank massimo.
+This step involves increasing the counter of threads that have finished the calculation as well as verifying the maximum rank node.
 
-La fase è necessaria affinchè il main thread sia in grado di capire quando può effettuare lo swap tra i dati strutturati ausiliari e i vettori che dovranno essere completamente aggiornati prima della nuova iterazione.
+The phase is necessary so that the main thread is able to understand when it can swap between the auxiliary structured data and the vectors that will have to be completely updated before the new iteration.
 
 ```C
 xpthread_mutex_lock(dati->terminated_cond->mutex,QUI);
@@ -55,12 +55,12 @@ xpthread_cond_signal(dati->terminated_cond->cv,QUI);
 xpthread_mutex_unlock(dati->terminated_cond->mutex,QUI);
 ```
 
-## Server python
+## Python Server
 
-Per quanto riguarda la gestione dei thread nel server python si è fatto uso di un threadpool:
-ad ogni thread viene assegnata una funzione la quale riceve gli archi dal client uno alla volta, i quali vengono inseriti in una lista e scritti nel file temporaneo non appena questa raggiunge una lunghezza di 10 elementi.
+As regards the management of threads in the Python server, a threadpool was used:
+each thread is assigned a function which receives the arcs from the client one at a time, which are inserted into a list and written to the temporary file as soon as it reaches a length of 10 elements.
 
-Alla fine dell'iterazione viene effettuata in ogni caso una push nel caso in cui l'ultimo blocco sia composto da meno di 10 elementi.
+At the end of the iteration, a push is performed in any case if the last block is composed of less than 10 elements.
 
 ```Py
     buffer.append(f"{From} {To}\n")
