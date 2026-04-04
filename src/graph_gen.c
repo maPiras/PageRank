@@ -1,139 +1,149 @@
-#include "../headers/xerrori.h"
+/* ============================================================================
+ * graph_gen.c
+ * Reads a directed graph from a Matrix Market (.mtx) file and builds an
+ * in-memory adjacency structure.
+ *
+ * A producer-consumer pattern is used: the main thread reads edges from the
+ * file (producer) and deposits them into a shared circular buffer; a pool of
+ * `num_threads` writer threads (consumers) pick up edges and insert them into
+ * the graph concurrently.
+ * ============================================================================ */
+
+#include "../headers/errcheck.h"
 #include "../headers/prototypes.h"
 
-grafo* crea_grafo(const char *infile,int T){
-  FILE* fd = xfopen(infile, "r", QUI);
-  if(fd == NULL) xtermina("Errore apertura infile\n", QUI);
+/* --------------------------------------------------------------------------
+ * build_graph
+ *
+ * Opens `filepath`, parses the Matrix Market header to learn the number of
+ * nodes and edges, then spawns `num_threads` consumer threads to insert edges
+ * into the graph structure.
+ *
+ * The .mtx format uses 1-based indices; they are converted to 0-based here.
+ * Self-loops are silently discarded by insert_edge().
+ * -------------------------------------------------------------------------- */
+graph_t *build_graph(const char *filepath, int num_threads) {
+    FILE *fp = xfopen(filepath, "r", QUI);
 
-  char* line = NULL;
-  size_t len = 0;
-  
-  while(getline(&line,&len,fd) != -1){
-    if(line[0]=='%') continue;
-    break;
-  }
+    char  *line = NULL;
+    size_t len  = 0;
 
-  int N1 = 0;
-  int N2 = 0;
-  int num_archi = 0;
-
-  arco fine;
-  fine.from = -1;
-  fine.to = -1;
-  
-  sscanf(line, "%d %d %d", &N1,&N2,&num_archi);
-
-  if(N1 != N2) xtermina("Dimensione non valida", QUI);
-
-  grafo *graph = malloc(sizeof(grafo));
-  graph->out = malloc(N1*sizeof(int));
-  graph->in = malloc(N1*sizeof(inmap));
-  graph->N = N1;
-  
-  for(int i=0; i<N1; i++)
-    graph->out[i] = 0;
-
-  for(int i=0; i<N1; i++)
-    graph->in[i] = NULL;
-
-  arco Buffer[BUFFSIZE];
-
-  pthread_mutex_t bmutex = PTHREAD_MUTEX_INITIALIZER;
-  pthread_mutex_t gmutex = PTHREAD_MUTEX_INITIALIZER;
-  
-  sem_t items;
-  sem_t free_slots;
-  
-  xsem_init(&items, 0, 0, QUI);
-  xsem_init(&free_slots, 0, BUFFSIZE, QUI);
-  
-  int pbindex = 0;
-  int cbindex = 0;
-
-  pthread_t t[T];
-  dati_consumatori d[T];
-
-  for(int i=0; i<T; i++){
-    d[i].bmutex = &bmutex;
-    d[i].free = &free_slots;
-    d[i].items = &items;
-    d[i].buffer = Buffer;
-    d[i].cbindex = &cbindex;
-    d[i].g = graph;
-    d[i].gmutex = &gmutex;
-
-    xpthread_create(&t[i], NULL, &tbody_scrittura, &d[i], QUI);
-  }
-  
-  
-  while(getline(&line,&len,fd) != -1){
-    arco arch;
-    arch.from = 0;
-    arch.to = 0;
-
-    sscanf(line, "%d %d",&arch.from,&arch.to);
-
-    if(arch.from > graph->N || arch.to > graph->N || arch.from <= 0 || arch.to <= 0){
-      //Se incontro un arco non valido interrompo tutti i thread inserendo T -1 nel grafo (nel pagerank se ne inserisce solo uno senza incrementare l'indice)
-      //Anticipo poi la deallocazione di tutti gli elementi compreso il grafo 
-      
-      for(int i=0; i<T; i++){
-      xsem_wait(&free_slots, QUI);
-      xpthread_mutex_lock(&bmutex, QUI);
-      Buffer[pbindex % BUFFSIZE] = fine;
-      pbindex += 1;
-      xpthread_mutex_unlock(&bmutex, QUI);
-      xsem_post(&items, QUI);
-      }
-
-      for(int i=0; i<T; i++)
-        xpthread_join(t[i], NULL, QUI);
-
-      xpthread_mutex_destroy(&bmutex, QUI);
-      xpthread_mutex_destroy(&gmutex, QUI);
-
-      xsem_destroy(&items, QUI);
-      xsem_destroy(&free_slots, QUI);
-      
-      fclose(fd);
-      free(line);
-
-      deallocate(graph);
-
-      xtermina("Arco non valido\n",QUI);
+    /* Skip comment lines (lines starting with '%'). */
+    while (getline(&line, &len, fp) != -1) {
+        if (line[0] == '%') continue;
+        break;
     }
 
-    arch.from --;
-    arch.to --;
-    xsem_wait(&free_slots, QUI);
-    xpthread_mutex_lock(&bmutex, QUI);
-    Buffer[pbindex % BUFFSIZE] = arch;
-    pbindex += 1;
-    xpthread_mutex_unlock(&bmutex, QUI);
-    xsem_post(&items, QUI);
-  }
-  
-  for(int i=0; i<T; i++){
-    xsem_wait(&free_slots, QUI);
-    xpthread_mutex_lock(&bmutex, QUI);
-    Buffer[pbindex % BUFFSIZE] = fine;
-    pbindex += 1;
-    xpthread_mutex_unlock(&bmutex, QUI);
-    xsem_post(&items, QUI);
-  }
+    /* Parse the header: rows cols num_edges. */
+    int rows = 0, cols = 0, num_edges = 0;
+    sscanf(line, "%d %d %d", &rows, &cols, &num_edges);
 
-  for(int i=0; i<T; i++)
-    xpthread_join(t[i], NULL, QUI);
+    if (rows != cols)
+        xtermina("Non-square matrix: rows != cols", QUI);
 
-  xpthread_mutex_destroy(&bmutex, QUI);
-  xpthread_mutex_destroy(&gmutex, QUI);
+    /* Allocate and zero-initialise the graph. */
+    graph_t *g     = malloc(sizeof(graph_t));
+    g->num_nodes   = rows;
+    g->out_degree  = calloc(rows, sizeof(int));
+    g->in_list     = calloc(rows, sizeof(in_node_t *));
 
-  xsem_destroy(&items, QUI);
-  xsem_destroy(&free_slots, QUI);
-  
-  fclose(fd);
+    /* Sentinel edge used to signal consumer threads to exit. */
+    edge_t sentinel = { .from = -1, .to = -1 };
 
-  free(line);
+    /* Shared circular buffer and its synchronisation primitives. */
+    edge_t buffer[BUFF_SIZE];
 
-  return graph;
+    pthread_mutex_t buf_mutex   = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t graph_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+    sem_t items;      /* Number of edges currently in the buffer            */
+    sem_t free_slots; /* Number of free slots in the buffer                 */
+    xsem_init(&items,      0, 0,         QUI);
+    xsem_init(&free_slots, 0, BUFF_SIZE, QUI);
+
+    int prod_idx = 0; /* Producer's write position                          */
+    int cons_idx = 0; /* Consumer's read position (shared, protected)       */
+
+    /* Spawn consumer threads. */
+    pthread_t      threads[num_threads];
+    consumer_data_t thread_args[num_threads];
+
+    for (int i = 0; i < num_threads; i++) {
+        thread_args[i].g          = g;
+        thread_args[i].bmutex     = &buf_mutex;
+        thread_args[i].gmutex     = &graph_mutex;
+        thread_args[i].items      = &items;
+        thread_args[i].free_slots = &free_slots;
+        thread_args[i].buffer     = buffer;
+        thread_args[i].cbindex    = &cons_idx;
+        xpthread_create(&threads[i], NULL, &writer_thread, &thread_args[i], QUI);
+    }
+
+    /* Produce edges: read one line at a time, validate, and enqueue. */
+    while (getline(&line, &len, fp) != -1) {
+        edge_t e = { .from = 0, .to = 0 };
+        sscanf(line, "%d %d", &e.from, &e.to);
+
+        /* Validate bounds (MTX indices are 1-based). */
+        if (e.from <= 0 || e.from > g->num_nodes ||
+            e.to   <= 0 || e.to   > g->num_nodes) {
+
+            /* Broadcast sentinels to shut down all threads, then clean up. */
+            for (int i = 0; i < num_threads; i++) {
+                xsem_wait(&free_slots, QUI);
+                xpthread_mutex_lock(&buf_mutex, QUI);
+                buffer[prod_idx % BUFF_SIZE] = sentinel;
+                prod_idx++;
+                xpthread_mutex_unlock(&buf_mutex, QUI);
+                xsem_post(&items, QUI);
+            }
+            for (int i = 0; i < num_threads; i++)
+                xpthread_join(threads[i], NULL, QUI);
+
+            xpthread_mutex_destroy(&buf_mutex,   QUI);
+            xpthread_mutex_destroy(&graph_mutex, QUI);
+            xsem_destroy(&items,      QUI);
+            xsem_destroy(&free_slots, QUI);
+            fclose(fp);
+            free(line);
+            free_graph(g);
+            xtermina("Invalid edge found in input file", QUI);
+        }
+
+        /* Convert from 1-based to 0-based indexing. */
+        e.from--;
+        e.to--;
+
+        /* Enqueue the edge into the circular buffer. */
+        xsem_wait(&free_slots, QUI);
+        xpthread_mutex_lock(&buf_mutex, QUI);
+        buffer[prod_idx % BUFF_SIZE] = e;
+        prod_idx++;
+        xpthread_mutex_unlock(&buf_mutex, QUI);
+        xsem_post(&items, QUI);
+    }
+
+    /* Send one sentinel per consumer thread to signal end-of-input. */
+    for (int i = 0; i < num_threads; i++) {
+        xsem_wait(&free_slots, QUI);
+        xpthread_mutex_lock(&buf_mutex, QUI);
+        buffer[prod_idx % BUFF_SIZE] = sentinel;
+        prod_idx++;
+        xpthread_mutex_unlock(&buf_mutex, QUI);
+        xsem_post(&items, QUI);
+    }
+
+    /* Wait for all consumer threads to finish. */
+    for (int i = 0; i < num_threads; i++)
+        xpthread_join(threads[i], NULL, QUI);
+
+    /* Clean up synchronisation primitives and file resources. */
+    xpthread_mutex_destroy(&buf_mutex,   QUI);
+    xpthread_mutex_destroy(&graph_mutex, QUI);
+    xsem_destroy(&items,      QUI);
+    xsem_destroy(&free_slots, QUI);
+    fclose(fp);
+    free(line);
+
+    return g;
 }

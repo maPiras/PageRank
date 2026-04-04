@@ -1,20 +1,22 @@
-CC = gcc
-CFLAGS = -std=c11 -Wall -g -O -pthread
-LIBS = -lm -lrt -pthread
+CC     = gcc
+CFLAGS = -std=c11 -Wall -g -O2 -pthread
+LIBS   = -lm -lrt -pthread
 
-SRCS = src/main.c src/graph_gen.c src/pagerank.c src/auxfunctions.c src/xerrori.c
-OBJS = src/main.o src/graph_gen.o src/pagerank.o src/auxfunctions.o src/xerrori.o
+SRCS = src/main.c src/graph_gen.c src/pagerank.c src/auxfunctions.c src/errcheck.c
+OBJS = $(SRCS:.c=.o)
+
+.PHONY: all clean
 
 all: pagerank
 
-# Regola per creare l'eseguibile
+# Link all object files into the final executable.
 pagerank: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
-# Regola per creare i file oggetto
+# Compile each source file to an object file.
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Regola per pulire i file generati
+# Remove generated object files and the executable.
 clean:
 	rm -f $(OBJS) pagerank

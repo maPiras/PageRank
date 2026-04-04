@@ -1,151 +1,220 @@
-#include "../headers/xerrori.h"
+/* ============================================================================
+ * pagerank.c
+ * Iterative PageRank computation using a multi-threaded power-iteration
+ * method.
+ *
+ * Algorithm overview
+ * ------------------
+ * The standard PageRank formula with dangling-node handling:
+ *
+ *   x_new[i] = (1-d)/N  +  d * sum_{j->i} ( x[j] / out(j) )
+ *                        +  d/N * St
+ *
+ * where:
+ *   d    = damping factor
+ *   N    = total number of nodes
+ *   St   = sum of ranks of dangling nodes (out-degree == 0) from the
+ *          previous iteration
+ *
+ * The iteration stops when either the L1 norm ||x_new - x||_1 < eps or the
+ * maximum number of iterations is reached.
+ *
+ * Threading model
+ * ---------------
+ * `num_threads` compute threads are spawned once and reused for every
+ * iteration.  A shared_index_t dispatcher hands each thread a unique node
+ * index to process; when all N nodes are processed the main loop resets the
+ * dispatcher for the next iteration.  A dedicated signal-handler thread
+ * handles SIGUSR1 (print progress) and SIGTERM (clean shutdown).
+ * ============================================================================ */
+
+#include "../headers/errcheck.h"
 #include "../headers/prototypes.h"
 
-double *pagerank(grafo *g,double d, double eps, int maxiter, int taux, int *numiter){
-  fprintf(stderr,"Inizio calcolo pagerank...\n");
+/* --------------------------------------------------------------------------
+ * pagerank
+ *
+ * Parameters:
+ *   g           — input graph
+ *   damping     — damping factor d  (typically 0.85–0.9)
+ *   eps         — convergence threshold (L1 norm)
+ *   maxiter     — maximum number of iterations
+ *   num_threads — number of parallel compute threads
+ *   num_iter    — [out] actual number of iterations performed
+ *
+ * Returns a heap-allocated array of N rank values (caller must free).
+ * -------------------------------------------------------------------------- */
+double *pagerank(graph_t *g, double damping, double eps,
+                 int maxiter, int num_threads, int *num_iter) {
+    fprintf(stderr, "Starting PageRank computation...\n");
 
-  double errore = eps;
-  int iter= 0;
+    int    n   = g->num_nodes;
+    double err = eps;
+    int    iter = 0;
 
-  pthread_mutex_t aux = PTHREAD_MUTEX_INITIALIZER;
-  pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
-  pthread_cond_t t_cv = PTHREAD_COND_INITIALIZER;
+    /* --- Synchronisation primitives ---
+     * t_mutex / t_cv   : shared with the signal-handler thread
+     * v_mutex / v_cv   : guard the shared node-index dispatcher              */
+    pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t  t_cv    = PTHREAD_COND_INITIALIZER;
+    pthread_mutex_t v_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t  v_cv    = PTHREAD_COND_INITIALIZER;
+    pthread_mutex_t aux_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-  sigset_t mask;
-  sigemptyset(&mask);  
-  sigaddset(&mask,SIGUSR1);
-  sigaddset(&mask,SIGTERM);
-  pthread_sigmask(SIG_BLOCK,&mask,NULL);
+    /* Block SIGUSR1 and SIGTERM in the main (and subsequently worker) threads
+     * so that only the dedicated signal-handler thread will receive them.     */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR1);
+    sigaddset(&mask, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
-  pthread_t gestore;
+    /* --- Rank vectors ---
+     * x      : ranks from the previous iteration
+     * xnext  : ranks being computed for the current iteration (returned)
+     * y      : y[i] = x[i] / out_degree[i]  (previous iter, for fast lookup)
+     * y_aux  : y[i] for the current iteration (written by threads, swapped in)*/
+    double *x     = malloc(n * sizeof(double));
+    double *xnext = malloc(n * sizeof(double));
+    double *y     = malloc(n * sizeof(double));
+    double *y_aux = malloc(n * sizeof(double));
 
-  double nodes_number = (double)g->N;
-  
-  double *x = malloc(nodes_number*sizeof(double));
-  double *y = malloc(nodes_number*sizeof(double));
+    /* --- Dangling-node sums ---
+     * dangling_sum      : St from the previous iteration (read by threads)
+     * dangling_sum_new  : St being accumulated for the current iteration     */
+    double dangling_sum     = 0.0;
+    double dangling_sum_new = 0.0;
 
-  double *xnext = malloc(nodes_number*sizeof(double));
-  double *y_aux = malloc(nodes_number*sizeof(double));
+    /* Precomputed constant: (1 - d) / N */
+    double term1 = (1.0 - damping) / (double)n;
 
-  coppia_indice massimo;
-  massimo.indice = 0;
-  massimo.rank = 0.0;
+    /* --- Current top-ranked node (updated by compute threads each iter) --- */
+    rank_entry_t cur_max  = { .node_id = 0,  .rank = 0.0  };
+    rank_entry_t next_max = { .node_id = -1, .rank = -1.0 };
 
-  coppia_indice massimo_next;
-  massimo_next.indice = -1;
-  massimo_next.rank = (double)-1;
+    /* --- Signal-handler thread --- */
+    pthread_t      handler_tid;
+    handler_data_t handler_args = {
+        .max_node  = &cur_max,
+        .iteration = &iter,
+        .mutex     = &t_mutex,
+    };
+    xpthread_create(&handler_tid, NULL, signal_handler_thread, &handler_args, QUI);
 
-  handler_data dati_gestore;
-  dati_gestore.massimo = &massimo;
-  dati_gestore.iterazione = &iter;
-  dati_gestore.mutex = &t_mutex;
+    /* --- Shared node-index dispatcher --- */
+    shared_index_t node_idx = {
+        .mutex = &v_mutex,
+        .cv    = &v_cv,
+        .index = 0,
+    };
 
-  xpthread_create(&gestore,NULL,handler_body,&dati_gestore,QUI);
+    /* --- Completion barrier (counts threads done per iteration) --- */
+    completion_t completion = {
+        .mutex = &t_mutex,
+        .cv    = &t_cv,
+        .count = 0,
+    };
 
-  pthread_t t[taux];
-  dati_calcolatori dati[taux];
+    /* --- Spawn compute threads --- */
+    pthread_t     threads[num_threads];
+    compute_data_t thread_args[num_threads];
 
-  pthread_mutex_t v_mutex = PTHREAD_MUTEX_INITIALIZER;
-  pthread_cond_t v_cv = PTHREAD_COND_INITIALIZER;
-
-  vector_cond vector_index;
-  vector_index.cv = &v_cv;
-  vector_index.mutex = &v_mutex;
-  vector_index.index = 0;
-
-  terminated cond_terminated;
-  cond_terminated.mutex = &t_mutex;
-  cond_terminated.cv = &t_cv;
-  cond_terminated.terminated = 0;
-
-  double term1 = (1-d)/nodes_number;
-  double St = 0;
-  double St_new = 0;
-
-  for(int i=0; i<taux; i++){
-    dati[i].g = g;
-    dati[i].x = x;
-    dati[i].y = y;
-    dati[i].St = &St;
-    dati[i].xnext = xnext;
-    dati[i].term1 = term1;
-    dati[i].dump = d;
-    dati[i].iter = &iter;
-    dati[i].errore = &errore;
-    dati[i].vector_cond = &vector_index;
-    dati[i].y_aux = y_aux;
-    dati[i].St_new = &St_new;
-    dati[i].terminated_cond = &cond_terminated;
-    dati[i].aux = &aux;
-    dati[i].massimo = &massimo_next;
-
-    xpthread_create(&t[i], NULL, &tbody_calcolo, &dati[i], QUI);
-  }
-
-  do{
-    xpthread_mutex_lock(&t_mutex,QUI);
-    while(cond_terminated.terminated != nodes_number){
-      xpthread_cond_wait(cond_terminated.cv,cond_terminated.mutex,QUI);
+    for (int i = 0; i < num_threads; i++) {
+        thread_args[i].g                = g;
+        thread_args[i].x                = x;
+        thread_args[i].y                = y;
+        thread_args[i].y_aux            = y_aux;
+        thread_args[i].xnext            = xnext;
+        thread_args[i].dangling_sum     = &dangling_sum;
+        thread_args[i].dangling_sum_new = &dangling_sum_new;
+        thread_args[i].term1            = term1;
+        thread_args[i].damping          = damping;
+        thread_args[i].iter             = &iter;
+        thread_args[i].error            = &err;
+        thread_args[i].node_idx         = &node_idx;
+        thread_args[i].completion       = &completion;
+        thread_args[i].aux_mutex        = &aux_mutex;
+        thread_args[i].max_node         = &next_max;
+        xpthread_create(&threads[i], NULL, &compute_thread, &thread_args[i], QUI);
     }
 
-    cond_terminated.terminated=0;
-    massimo.indice = massimo_next.indice;
-    massimo.rank = massimo_next.rank;
-    massimo_next.rank = -1;
-    xpthread_mutex_unlock(&t_mutex,QUI);
+    /* -----------------------------------------------------------------------
+     * Main iteration loop
+     * ----------------------------------------------------------------------- */
+    do {
+        /* Wait until all N nodes have been processed this iteration. */
+        xpthread_mutex_lock(&t_mutex, QUI);
+        while (completion.count != n)
+            xpthread_cond_wait(completion.cv, completion.mutex, QUI);
 
-    if(errore<eps){
-      xpthread_mutex_lock(vector_index.mutex,QUI);
-      vector_index.index = -1;
-      xpthread_cond_signal(vector_index.cv,QUI);
-      xpthread_mutex_unlock(vector_index.mutex,QUI);
-      break;
-   }
-    
-    if(iter>0){
-      St = St_new;
-      for(int i=0; i<nodes_number; i++){
-        y[i] = y_aux[i];
-        x[i] = xnext[i];
-      }
-    }
+        /* Reset the completion counter for the next iteration. */
+        completion.count = 0;
 
+        /* Update the top-ranked node for the signal handler. */
+        cur_max.node_id   = next_max.node_id;
+        cur_max.rank      = next_max.rank;
+        next_max.rank     = -1.0;
+        xpthread_mutex_unlock(&t_mutex, QUI);
 
-    
-    xpthread_mutex_lock(vector_index.mutex,QUI);
-    while(vector_index.index < nodes_number){
-      xpthread_cond_wait(vector_index.cv,vector_index.mutex,QUI);
-    }
+        /* Check convergence. */
+        if (err < eps) {
+            /* Signal all threads to exit by setting index = -1. */
+            xpthread_mutex_lock(node_idx.mutex, QUI);
+            node_idx.index = -1;
+            xpthread_cond_signal(node_idx.cv, QUI);
+            xpthread_mutex_unlock(node_idx.mutex, QUI);
+            break;
+        }
 
-    St_new = 0; //Azzero l'accumulatore del fattore St per la nuova iterazione
-    errore = 0; //Azzero l'errore per la nuova iterazione
-    vector_index.index = 0; //Ricomincio dal nodo zero '' ''
+        /* Wait until all threads have finished reading x/y before swapping. */
+        if (iter > 0) {
+            dangling_sum = dangling_sum_new;
+            for (int i = 0; i < n; i++) {
+                y[i] = y_aux[i];
+                x[i] = xnext[i];
+            }
+        }
 
-    xpthread_cond_signal(vector_index.cv,QUI);
-    xpthread_mutex_unlock(vector_index.mutex,QUI);
-    
-    iter++;
+        /* Wait until the index dispatcher has been fully consumed this round. */
+        xpthread_mutex_lock(node_idx.mutex, QUI);
+        while (node_idx.index < n)
+            xpthread_cond_wait(node_idx.cv, node_idx.mutex, QUI);
 
-  }while(iter<=maxiter);
+        /* Reset for the next iteration and wake one waiting thread. */
+        dangling_sum_new = 0.0;
+        err              = 0.0;
+        node_idx.index   = 0;
 
-  *numiter = iter;
-  vector_index.index = -1;
+        xpthread_cond_signal(node_idx.cv, QUI);
+        xpthread_mutex_unlock(node_idx.mutex, QUI);
 
-   for(int i=0; i<taux; i++) xpthread_join(t[i],NULL,QUI);
+        iter++;
 
-  pthread_kill(gestore,SIGTERM);
-  xpthread_join(gestore,NULL,QUI);
+    } while (iter <= maxiter);
 
-  free(x);
-  free(y);
-  free(y_aux);
+    *num_iter = iter;
 
-  xpthread_mutex_destroy(&aux,QUI);
-  xpthread_mutex_destroy(&t_mutex,QUI);
-  xpthread_mutex_destroy(&v_mutex,QUI);
-  xpthread_cond_destroy(&v_cv,QUI);
-  xpthread_cond_destroy(&t_cv,QUI);
+    /* Ensure threads see index == -1 in case we exited via maxiter. */
+    node_idx.index = -1;
 
-  return xnext;
+    /* Join all compute threads. */
+    for (int i = 0; i < num_threads; i++)
+        xpthread_join(threads[i], NULL, QUI);
+
+    /* Shut down the signal-handler thread. */
+    pthread_kill(handler_tid, SIGTERM);
+    xpthread_join(handler_tid, NULL, QUI);
+
+    /* Free intermediate buffers; xnext is returned to the caller. */
+    free(x);
+    free(y);
+    free(y_aux);
+
+    xpthread_mutex_destroy(&aux_mutex, QUI);
+    xpthread_mutex_destroy(&t_mutex,   QUI);
+    xpthread_mutex_destroy(&v_mutex,   QUI);
+    xpthread_cond_destroy(&v_cv,       QUI);
+    xpthread_cond_destroy(&t_cv,       QUI);
+
+    return xnext;
 }
-

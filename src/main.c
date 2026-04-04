@@ -1,79 +1,86 @@
-#include "../headers/xerrori.h"
+/* ============================================================================
+ * main.c
+ * Entry point for the PageRank tool.
+ *
+ * Parses command-line options, builds the graph from a Matrix Market (.mtx)
+ * file, runs the PageRank algorithm, and prints the top-K ranked nodes.
+ *
+ * Usage:
+ *   pagerank [-k K] [-m M] [-d D] [-e E] [-t T] <infile>
+ * ============================================================================ */
+
+#include "../headers/errcheck.h"
 #include "../headers/prototypes.h"
 
 int main(int argc, char *argv[]) {
-  int opt;
+    int opt;
 
-  int K = TOP_NODES;
-  int M = MAX_ITERATIONS;
-  double D = DUMPING;
-  double E = MAX_ERROR;
-  int T = THREADS;
+    /* Algorithm parameters with their default values. */
+    int    K = TOP_NODES;      /* Number of top nodes to display             */
+    int    M = MAX_ITERATIONS; /* Maximum number of iterations               */
+    double D = DAMPING;        /* Damping factor                             */
+    double E = MAX_ERROR;      /* Convergence threshold                      */
+    int    T = THREADS;        /* Number of worker threads                   */
 
-  while ((opt = getopt(argc, argv, "k:m:d:e:t:")) != -1) {
-    switch (opt) {
-    case 'k':
-      K = atoi(optarg);
-      break;
-    case 'm':
-      M = atoi(optarg);
-
-      break;
-    case 'd':
-      D = atof(optarg);
-
-      break;
-    case 'e':
-      E = atof(optarg);
-
-      break;
-    case 't':
-      T = atoi(optarg);
-
-      break;
-    default:
-      help();
-      exit(1);
+    /* Parse optional flags. */
+    while ((opt = getopt(argc, argv, "k:m:d:e:t:")) != -1) {
+        switch (opt) {
+        case 'k': K = atoi(optarg); break;
+        case 'm': M = atoi(optarg); break;
+        case 'd': D = atof(optarg); break;
+        case 'e': E = atof(optarg); break;
+        case 't': T = atoi(optarg); break;
+        default:
+            print_usage();
+            exit(1);
+        }
     }
-  }
 
-  if (optind + 1 != argc) {
-    help();
-    exit(1);
-  }
+    /* Exactly one positional argument (the input file) must remain. */
+    if (optind + 1 != argc) {
+        print_usage();
+        exit(1);
+    }
 
-  grafo *graph = crea_grafo(argv[argc - 1], T);
+    /* Build the graph from the .mtx file using T threads. */
+    graph_t *g = build_graph(argv[argc - 1], T);
 
-  nodes_dead_end_valid_arcs(graph);
+    /* Print basic graph statistics (node count, dead-ends, valid arcs). */
+    print_graph_stats(g);
 
-  int numit;
-  double *vector = pagerank(graph,D,E,M,T,&numit);
+    /* Run the PageRank algorithm. */
+    int     num_iter;
+    double *ranks = pagerank(g, D, E, M, T, &num_iter);
 
-  double sum = 0;
-  for(int i=0; i<graph->N; i++)
-  sum+=vector[i];
+    /* Verify that ranks sum to 1 (sanity check). */
+    double rank_sum = 0.0;
+    for (int i = 0; i < g->num_nodes; i++)
+        rank_sum += ranks[i];
 
-  if(numit < M)
-  printf("Converged after %d iterations\n",numit);
-  else
-  printf("Did not converge after %d iterations\n",M);
+    if (num_iter < M)
+        printf("Converged after %d iterations\n", num_iter);
+    else
+        printf("Did not converge after %d iterations\n", M);
 
-  printf("Sum of ranks: %.4f   (should be 1)\n",sum);
+    printf("Sum of ranks: %.4f   (should be 1)\n", rank_sum);
 
-  coppia_indice *vector_index = malloc(sizeof(coppia_indice)*graph->N);
-  for(int i=0; i<graph->N; i++){
-    vector_index[i].indice = i;
-    vector_index[i].rank = vector[i];
-  }
+    /* Build a sortable array of (node_id, rank) pairs and sort descending. */
+    rank_entry_t *sorted = malloc(sizeof(rank_entry_t) * g->num_nodes);
+    for (int i = 0; i < g->num_nodes; i++) {
+        sorted[i].node_id = i;
+        sorted[i].rank    = ranks[i];
+    }
+    qsort(sorted, g->num_nodes, sizeof(rank_entry_t), compare_rank_desc);
 
-  qsort(vector_index,graph->N,sizeof(coppia_indice),compare);
+    /* Print the top-K nodes. */
+    printf("Top %d nodes:\n", K);
+    for (int i = 0; i < K; i++)
+        printf("  node %-6d  rank %.8f\n", sorted[i].node_id, sorted[i].rank);
 
-  printf("Top %d nodes:\n",K);
-  for(int i=0; i<K; i++) printf("  %d %f\n",vector_index[i].indice,vector_index[i].rank);
+    /* Clean up. */
+    free_graph(g);
+    free(sorted);
+    free(ranks);
 
-  deallocate(graph);
-  free(vector_index);
-  free(vector);
-
-  return 0;
+    return 0;
 }
